@@ -1,0 +1,13 @@
+# Python virtual environment
+environment/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Frontend
+frontend/node_modules/
+frontend/build/
