@@ -333,7 +333,7 @@ function App() {
     <div className="page">
       <header className="topbar">
         <div className="brand">
-          <h1>Telusko Trac</h1>
+          <h1>StockFlow</h1>
           <span className="brand-sub">Stockroom · <LiveClock /></span>
         </div>
         <div className="top-actions">
