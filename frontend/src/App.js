@@ -54,6 +54,18 @@ const errorText = (err, fallback) => {
 const isTyping = (el) =>
   el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
+// Ticks every second on its own so the rest of the page doesn't re-render
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const date = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const time = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return <time dateTime={now.toISOString()}>{date} · {time}</time>;
+}
+
 function App() {
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -315,7 +327,6 @@ function App() {
     </th>
   );
 
-  const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const formValue = Number(form.price || 0) * Number(form.quantity || 0);
 
   return (
@@ -323,7 +334,7 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <h1>Telusko Trac</h1>
-          <span className="brand-sub">Stockroom · {today}</span>
+          <span className="brand-sub">Stockroom · <LiveClock /></span>
         </div>
         <div className="top-actions">
           {updatedAt && (
