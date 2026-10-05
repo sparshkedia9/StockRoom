@@ -43,6 +43,16 @@ Product shape:
 }
 ```
 
+### How IDs are assigned
+
+The product **name** decides the ID (matched ignoring case and surrounding spaces):
+
+- `POST /products` with a name that already exists updates that product and keeps its ID.
+- A new name gets the next ID after the highest one. Any `id` sent with a POST is ignored.
+- `PUT /products/{id}` refuses to rename a product to a name another product already has.
+
+CSV imports follow the same rule. Columns are `name, description, price, quantity`; an `id` column is allowed but ignored.
+
 On first startup, the database is seeded with a few sample products if the table is empty.
 
 ## Getting Started

@@ -4,6 +4,7 @@ from models import Product
 from database import session, engine
 import database_models
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 app = FastAPI()
 
@@ -71,19 +72,40 @@ def get_products_id(id: int, db: Session = Depends(get_db)):
 
     raise HTTPException(status_code=404, detail="product not found")
 
+def find_by_name(db: Session, name: str):
+    # Names match ignoring case and surrounding spaces
+    return db.query(database_models.Product).filter(
+        func.lower(func.trim(database_models.Product.name)) == name.strip().lower()
+    ).first( )
+
+
+# The name decides the ID: an existing name keeps its ID and is updated,
+# a new name gets the next ID after the highest one
 @app.post("/products")
 def add_products(product: Product, db: Session = Depends(get_db)):
-    if db.query(database_models.Product).filter(database_models.Product.id == product.id).first( ):
-        raise HTTPException(status_code=400, detail="product with this id already exists")
-    db.add(database_models.Product(**product.model_dump()))
+    product.name = product.name.strip()
+    db_products = find_by_name(db, product.name)
+    if db_products:
+        db_products.description = product.description
+        db_products.price = product.price
+        db_products.quantity = product.quantity
+    else:
+        max_id = db.query(func.max(database_models.Product.id)).scalar() or 0
+        db_products = database_models.Product(**product.model_dump(exclude={"id"}), id=max_id + 1)
+        db.add(db_products)
     db.commit()
-    return product
+    db.refresh(db_products)
+    return db_products
 
 
 @app.put("/products/{id}")
 def update_products(id: int, product:Product, db: Session = Depends(get_db)):
     db_products = db.query(database_models.Product).filter(database_models.Product.id == id).first( )
     if db_products:
+        product.name = product.name.strip()
+        same_name = find_by_name(db, product.name)
+        if same_name and same_name.id != id:
+            raise HTTPException(status_code=400, detail=f"another product (#{same_name.id}) already has this name")
         db_products.name = product.name
         db_products.description = product.description
         db_products.price = product.price

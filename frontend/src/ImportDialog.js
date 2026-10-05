@@ -47,7 +47,9 @@ function ImportDialog({ api, fileName, parsed, describeError, onClose }) {
           await api.put(`/products/${data.id}`, data);
           summary.updated++;
         } else {
-          await api.post("/products", data);
+          // The server assigns the ID; it matches the preview while rows go in order
+          const { id, ...body } = data;
+          await api.post("/products", body);
           summary.added++;
         }
       } catch (err) {
@@ -79,7 +81,7 @@ function ImportDialog({ api, fileName, parsed, describeError, onClose }) {
           <>
             <div className="notice notice-err">{parsed.error}</div>
             <p className="import-help">
-              Expected columns: <code>id, name, description, price, quantity</code>.{" "}
+              Expected columns: <code>name, description, price, quantity</code>. IDs are assigned by name.{" "}
               <button className="link" onClick={downloadTemplate}>Download a template</button>
             </p>
             <div className="dialog-actions">
@@ -146,7 +148,7 @@ function ImportDialog({ api, fileName, parsed, describeError, onClose }) {
 
             {counts.exists > 0 && (
               <fieldset className="import-mode" disabled={running}>
-                <legend>Rows whose ID already exists</legend>
+                <legend>Rows whose name already exists</legend>
                 <label>
                   <input type="radio" name="mode" value="skip" checked={mode === "skip"} onChange={() => setMode("skip")} />
                   Skip them

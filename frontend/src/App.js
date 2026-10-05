@@ -3,7 +3,7 @@ import axios from "axios";
 import "./App.css";
 import TaglineSection from "./TaglineSection";
 import ImportDialog, { downloadTemplate } from "./ImportDialog";
-import { readProducts } from "./csv";
+import { readProducts, nameKey } from "./csv";
 
 const api = axios.create({
   baseURL: "http://localhost:8000",
@@ -100,8 +100,7 @@ function App() {
     if (!file) return;
     try {
       const text = await file.text();
-      const existing = new Set(products.map((p) => Number(p.id)));
-      setImportData({ fileName: file.name, parsed: readProducts(text, existing) });
+      setImportData({ fileName: file.name, parsed: readProducts(text, products) });
     } catch {
       setToast({ kind: "err", text: `Couldn't read ${file.name}` });
     }
@@ -142,11 +141,11 @@ function App() {
   );
 
   const openNew = useCallback(() => {
-    setForm({ ...emptyForm, id: String(nextId) });
+    setForm(emptyForm);
     setEditId(null);
     setFormError("");
     setDrawerOpen(true);
-  }, [nextId]);
+  }, []);
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -233,6 +232,13 @@ function App() {
     });
   }, [products, filter, lowOnly, lowStock, sortField, sortDirection]);
 
+  // Product already using the name typed in the form (other than the one being edited)
+  const nameMatch = useMemo(() => {
+    const key = nameKey(form.name);
+    if (!key) return null;
+    return products.find((p) => nameKey(p.name) === key && p.id !== editId) || null;
+  }, [products, form.name, editId]);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -243,22 +249,23 @@ function App() {
     setLoading(true);
     setFormError("");
     const body = {
-      ...form,
-      id: Number(form.id),
       name: form.name.trim(),
       description: form.description.trim(),
       price: Number(form.price),
       quantity: Number(form.quantity),
     };
     try {
+      let savedId = editId;
       if (editId !== null) {
         await api.put(`/products/${editId}`, body);
         setToast({ kind: "ok", text: `Saved ${body.name}` });
       } else {
-        await api.post("/products", body);
-        setToast({ kind: "ok", text: `Added ${body.name}` });
+        // The server keeps the ID of an existing name, or assigns the next one
+        const res = await api.post("/products", body);
+        savedId = res.data.id;
+        setToast({ kind: "ok", text: `${nameMatch ? "Updated" : "Added"} ${body.name}` });
       }
-      setFlashId(body.id);
+      setFlashId(savedId);
       closeDrawer();
       fetchProducts();
     } catch (err) {
@@ -527,16 +534,13 @@ function App() {
               <label className="field">
                 <span>SKU / ID</span>
                 <input
-                  type="number"
+                  type="text"
                   name="id"
-                  value={form.id}
-                  onChange={handleChange}
-                  required
-                  min="1"
-                  step="1"
-                  disabled={editId !== null}
+                  value={editId !== null ? sku(editId) : nameMatch ? sku(nameMatch.id) : sku(nextId)}
+                  readOnly
+                  disabled
                 />
-                {editId === null && <small>Next free ID is filled in. You can change it.</small>}
+                {editId === null && <small>Assigned automatically from the name.</small>}
               </label>
               <label className="field">
                 <span>Name</span>
@@ -549,6 +553,12 @@ function App() {
                   autoFocus
                   autoComplete="off"
                 />
+                {nameMatch && (
+                  <small>
+                    {nameMatch.name} already exists as {sku(nameMatch.id)}.{" "}
+                    {editId === null ? "Saving will update it." : "Pick a different name."}
+                  </small>
+                )}
               </label>
               <label className="field">
                 <span>Description</span>
@@ -600,7 +610,7 @@ function App() {
                   Cancel
                 </button>
                 <button className="btn btn-primary" type="submit" disabled={loading}>
-                  {editId !== null ? "Save changes" : "Add product"}
+                  {editId !== null || nameMatch ? "Save changes" : "Add product"}
                 </button>
               </div>
             </form>

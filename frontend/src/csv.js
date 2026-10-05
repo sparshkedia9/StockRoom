@@ -1,12 +1,13 @@
 // Small CSV reader for product imports. Handles quoted fields, "" escapes,
 // CRLF line endings and a UTF-8 BOM (Excel adds one).
 
-export const COLUMNS = ["id", "name", "description", "price", "quantity"];
+// "id" may be present in a file but is ignored: the name decides the ID
+export const COLUMNS = ["name", "description", "price", "quantity"];
 
 export const TEMPLATE =
-  "id,name,description,price,quantity\n" +
-  '101,Desk lamp,"LED lamp, warm white",34.50,12\n' +
-  "102,Notebook,A5 dotted notebook,4.99,80\n";
+  "name,description,price,quantity\n" +
+  'Desk lamp,"LED lamp, warm white",34.50,12\n' +
+  "Notebook,A5 dotted notebook,4.99,80\n";
 
 export function parseCsv(text) {
   const rows = [];
@@ -51,8 +52,11 @@ export function parseCsv(text) {
 
 const toNumber = (raw) => Number(String(raw).replace(/[$,\s]/g, ""));
 
-// Turns CSV text into rows marked "new", "exists" or "error"
-export function readProducts(text, existingIds) {
+export const nameKey = (name) => String(name ?? "").trim().toLowerCase();
+
+// Turns CSV text into rows marked "new", "exists" or "error".
+// A name already in the list keeps its ID; new names get the next IDs in file order.
+export function readProducts(text, existingProducts) {
   const table = parseCsv(text);
   if (table.length === 0) return { error: "The file is empty." };
 
@@ -63,27 +67,34 @@ export function readProducts(text, existingIds) {
   }
   const at = Object.fromEntries(COLUMNS.map((col) => [col, header.indexOf(col)]));
 
+  const idByName = new Map(existingProducts.map((p) => [nameKey(p.name), Number(p.id)]));
+  let nextId = existingProducts.reduce((max, p) => Math.max(max, Number(p.id)), 0) + 1;
+
   const seen = new Set();
   const rows = table.slice(1).map((cells, i) => {
     const get = (col) => (cells[at[col]] ?? "").trim();
     const line = i + 2;
     const data = {
-      id: toNumber(get("id")),
+      id: NaN,
       name: get("name"),
       description: get("description"),
       price: toNumber(get("price")),
       quantity: toNumber(get("quantity")),
     };
+    const key = nameKey(data.name);
 
     let error = "";
-    if (!Number.isInteger(data.id) || data.id < 1) error = "ID must be a whole number above 0";
-    else if (seen.has(data.id)) error = "ID appears twice in the file";
-    else if (!data.name) error = "Name is empty";
+    if (!data.name) error = "Name is empty";
+    else if (seen.has(key)) error = "Name appears twice in the file";
     else if (get("price") === "" || !Number.isFinite(data.price) || data.price < 0) error = "Price must be a number, 0 or more";
     else if (get("quantity") === "" || !Number.isInteger(data.quantity) || data.quantity < 0) error = "Quantity must be a whole number, 0 or more";
 
-    if (Number.isInteger(data.id)) seen.add(data.id);
-    const status = error ? "error" : existingIds.has(data.id) ? "exists" : "new";
+    if (key) seen.add(key);
+    let status = "error";
+    if (!error) {
+      status = idByName.has(key) ? "exists" : "new";
+      data.id = status === "exists" ? idByName.get(key) : nextId++;
+    }
     return { line, data, status, error };
   });
 
